@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use iced::*;
 
 mod style;
@@ -25,13 +27,16 @@ struct Calculator {
 enum Token {
 	Operation(Operation),
 	Number(String),
+	Percentage(String),
+	Result(String),
 }
 
 impl ToString for Token {
 	fn to_string(&self) -> String {
 		match self {
 			Token::Operation(op) => op.to_string(),
-			Token::Number(n) => n.to_string(),
+			Token::Number(n) | Token::Result(n) => n.clone(),
+			Token::Percentage(n) => format!("{}%", n),
 		}
 	}
 }
@@ -55,7 +60,10 @@ impl Application for Calculator {
 				self.tokens.clear();
 			}
 			Message::OperationButton(SignChange) => {
-				let last_num_buf = self.tokens.iter_mut().rev().find_map(|t| if let Token::Number(n) = t { Some(n) } else { None });
+				let last_num_buf = self.tokens.iter_mut().rev().find_map(|t| match t {
+					Token::Number(n) | Token::Percentage(n) => Some(n),
+					_ => None,
+				});
 				if let Some(num_buf) = last_num_buf {
 					if &num_buf[..][..1] == "-" {
 						num_buf.remove(0);
@@ -64,12 +72,28 @@ impl Application for Calculator {
 					}
 				}
 			}
+			Message::OperationButton(Percent) => match self.tokens.last_mut() {
+				Some(t @ Token::Number(_)) => {
+					let percentage = match t {
+						Token::Number(n) => Token::Percentage(n.clone()),
+						_ => unreachable!(),
+					};
+					*t = percentage;
+				}
+				_ => (),
+			},
 			Message::OperationButton(Equals) => {
 				self.tokens.push(Token::Operation(Equals));
 				self.calculate();
 			}
 			Message::OperationButton(Dot) => {
-				let last_num_buf = self.tokens.iter().rev().find_map(|t| if let Token::Number(n) = t { Some(n) } else { None });
+				let last_num_buf = self.tokens.iter().rev().find_map(|t| {
+					if let Token::Number(n) = t {
+						Some(n)
+					} else {
+						None
+					}
+				});
 				if let Some(num_buf) = last_num_buf {
 					if num_buf.contains(".") {
 						return Command::none();
@@ -94,7 +118,7 @@ impl Application for Calculator {
 					Some(Token::Number(ref mut num_buf)) => num_buf.push(number),
 					Some(_) | None => self.tokens.push(Token::Number(number.to_string())),
 				}
-			},
+			}
 		}
 		println!("{:?}", self.tokens);
 		Command::none()
@@ -132,7 +156,7 @@ impl Application for Calculator {
 								.width(Length::Shrink)
 								.size(38),
 						)
-						.height(Length::Fill)
+						.height(Length::Fill),
 				)
 				.push(
 					Row::new()
@@ -251,14 +275,18 @@ impl Application for Calculator {
 						.height(Length::Fill),
 				),
 		)
-			.style(style::Container)
-			.into()
+		.style(style::Container)
+		.into()
 	}
 }
 
 impl Calculator {
 	fn display(&self) -> String {
-		let str = self.tokens.iter().map(|t| t.to_string()).collect::<String>();
+		let str = self
+			.tokens
+			.iter()
+			.map(|t| t.to_string())
+			.collect::<String>();
 		str
 	}
 
@@ -270,23 +298,45 @@ impl Calculator {
 				Token::Number(num_buf) => {
 					let num = num_buf.parse::<f64>().unwrap();
 					match last_op {
-						Some(op) => {
-							match op {
-								Operation::Sum => result += num,
-								Operation::Subtract => result -= num,
-								Operation::Multiply => result *= num,
-								Operation::Divide => result /= num,
-								Operation::Percent => unimplemented!(),
-								_ => unreachable!(),
-							}
+						Some(op) => match op {
+							Operation::Sum => result += num,
+							Operation::Subtract => result -= num,
+							Operation::Multiply => result *= num,
+							Operation::Divide => result /= num,
+							_ => unreachable!(),
 						},
 						None => result = num,
 					}
 				}
+				Token::Percentage(num_buf) => {
+					let num = num_buf.parse::<f64>().unwrap();
+					match last_op {
+						Some(Operation::Sum) => {
+							result += result * (num / 100.0);
+						}
+						Some(Operation::Subtract) => {
+							result -= result * (num / 100.0);
+						}
+						Some(Operation::Multiply) => {
+							result *= num / 100.0;
+						}
+						Some(Operation::Divide) => {
+							result /= num / 100.0;
+						}
+						None => {
+							result = num / 100.0;
+						}
+						_ => unreachable!(),
+					}
+				}
+				Token::Operation(Operation::Equals) => {
+					//TODO repeat last op after first equals
+				},
 				Token::Operation(op) => last_op = Some(*op),
+				Token::Result(_res) => (),
 			}
 		}
-		self.tokens.push(Token::Number(result.to_string()));
+		self.tokens.push(Token::Result(result.to_string()));
 	}
 }
 
