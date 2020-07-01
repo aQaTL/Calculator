@@ -359,10 +359,10 @@ enum Operation {
 	Dot,
 }
 
-impl ToString for Operation {
-	fn to_string(&self) -> String {
+impl Operation {
+	fn to_str(&self) -> &'static str {
 		use Operation::*;
-		let str = match self {
+		match self {
 			AC => "AC",
 			SignChange => "-",
 			Percent => "%",
@@ -372,8 +372,13 @@ impl ToString for Operation {
 			Sum => "+",
 			Equals => "=",
 			Dot => ".",
-		};
-		String::from(str)
+		}
+	}
+}
+
+impl ToString for Operation {
+	fn to_string(&self) -> String {
+		self.to_str().to_string()
 	}
 }
 
