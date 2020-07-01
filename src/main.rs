@@ -245,7 +245,7 @@ impl Application for Calculator {
 						.push(
 							calc_button(self.button_states.next(), calc_button_label("3"))
 								.style(CalcButton::Number)
-								.on_press(Message::NumberButton(4)),
+								.on_press(Message::NumberButton(3)),
 						)
 						.push(
 							calc_button(self.button_states.next(), calc_button_label("+"))
@@ -331,7 +331,7 @@ impl Calculator {
 				}
 				Token::Operation(Operation::Equals) => {
 					//TODO repeat last op after first equals
-				},
+				}
 				Token::Operation(op) => last_op = Some(*op),
 				Token::Result(_res) => (),
 			}
